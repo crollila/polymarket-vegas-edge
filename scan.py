@@ -61,6 +61,9 @@ def main() -> int:
     ap.add_argument("--maker", action="store_true", help="price as a resting maker order")
     ap.add_argument("--all", action="store_true", help="show every matched game, including no-bets")
     ap.add_argument("--json", metavar="PATH", help="also write results as JSON")
+    ap.add_argument("--preset", choices=["baseline", "conviction"],
+                    help="conviction: higher edge bar, fewer and larger positions "
+                         "(see RESEARCH.md)")
     ap.add_argument("--log", action="store_true",
                     help="record these picks to predictions.jsonl for CLV tracking")
     args = ap.parse_args()
@@ -73,6 +76,8 @@ def main() -> int:
         maker_only=True if args.maker else None,
         include_live=False if args.no_live else None,
     )
+    if args.preset:
+        cfg.apply_preset(args.preset)
     if args.books:
         cfg.bookmakers = [b.strip().lower() for b in args.books.split(",") if b.strip()]
 

@@ -72,3 +72,29 @@ class Config:
     @property
     def effective_min_edge(self) -> float:
         return self.min_edge + self.fee_buffer
+
+    def apply_preset(self, name: str) -> "Config":
+        """
+        Named strategy presets.
+
+        `conviction` encodes the one actionable finding from the historical
+        record in RESEARCH.md: across 185 resolved positions, the smallest
+        stake quartile lost 12 points against its own entry price while the
+        largest beat it by 9. The consistent loser was the marginal small bet.
+
+        So this preset does not chase the winning quartile -- it removes the
+        losing tail: a higher edge bar, fewer concurrent positions, and more
+        size on the ones that clear it. Stated in advance and left fixed, so
+        forward results are a test rather than a curve fit.
+        """
+        if name == "conviction":
+            self.min_edge = 0.06
+            self.max_positions = 3
+            self.max_pct_bankroll_per_trade = 0.20
+            self.kelly_fraction = 0.25
+            self.min_order_usd = max(self.min_order_usd, 10.0)
+        elif name == "baseline":
+            pass
+        else:
+            raise ValueError(f"unknown preset: {name!r}")
+        return self

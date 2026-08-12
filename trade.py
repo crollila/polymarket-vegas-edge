@@ -152,6 +152,9 @@ def main() -> int:
     ap.add_argument("--max-positions", type=int)
     ap.add_argument("--interval", type=int, help="seconds between cycles")
     ap.add_argument("--maker", action="store_true", help="rest orders instead of crossing")
+    ap.add_argument("--preset", choices=["baseline", "conviction"],
+                    help="conviction: higher edge bar, fewer and larger positions "
+                         "(see RESEARCH.md)")
     ap.add_argument("--books", help="comma-separated bookmaker keys")
     args = ap.parse_args()
 
@@ -163,6 +166,8 @@ def main() -> int:
         maker_only=True if args.maker else None,
         dry_run=not args.live,
     )
+    if args.preset:
+        cfg.apply_preset(args.preset)
     if args.books:
         cfg.bookmakers = [b.strip().lower() for b in args.books.split(",") if b.strip()]
 

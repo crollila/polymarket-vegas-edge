@@ -214,6 +214,66 @@ def main() -> int:
         print(f"    Counting them as total losses would move overall P&L to "
               f"${tp - oc:+,.2f}.")
 
+    # ---- conviction: does stake size predict outcome? ----
+    print(f"\n  CONVICTION TEST  (does your own bet size carry information?)")
+    print(f"    Stake is chosen BEFORE the outcome, so this is an ex-ante variable,")
+    print(f"    not hindsight. Implied entry price solves ROI = winrate/price - 1,")
+    print(f"    which separates 'won a lot' from 'beat the price'.")
+    srt = sorted(resolved, key=lambda x: x.bought)
+    q = len(srt) // 4
+    print(f"\n    {'quartile':<12}{'n':>4}{'avg bet':>10}{'win%':>7}{'ROI':>9}"
+          f"{'implied px':>12}{'edge vs px':>12}")
+    quartiles = []
+    for i, label in enumerate(["smallest", "2nd", "3rd", "largest"]):
+        grp = srt[i * q:((i + 1) * q if i < 3 else len(srt))]
+        quartiles.append(grp)
+        cost = sum(x.bought for x in grp)
+        pnl = sum(x.pnl for x in grp)
+        wr = sum(1 for x in grp if x.won) / len(grp)
+        r = pnl / cost if cost else 0
+        px = wr / (1 + r) if (1 + r) else 0
+        print(f"    {label:<12}{len(grp):>4}{cost/len(grp):>10,.2f}{wr*100:>6.0f}%"
+              f"{r*100:>+8.1f}%{px:>12.3f}{(wr-px)*100:>+11.1f}pts")
+
+    big, rest = quartiles[3], [p for g in quartiles[:3] for p in g]
+
+    def roi_of(g):
+        c = sum(x.bought for x in g)
+        return sum(x.pnl for x in g) / c if c else 0.0
+
+    def gap_ci(a, b, seed=11):
+        rng = random.Random(seed)
+        out = []
+        for _ in range(10_000):
+            sa = [a[rng.randrange(len(a))] for _ in range(len(a))]
+            sb = [b[rng.randrange(len(b))] for _ in range(len(b))]
+            out.append(roi_of(sa) - roi_of(sb))
+        out.sort()
+        return out[250], out[9750]
+
+    gap = roi_of(big) - roi_of(rest)
+    lo, hi = gap_ci(big, rest)
+    print(f"\n    largest quartile minus the rest: {gap*100:+.1f} pts of ROI")
+    print(f"    95% CI [{lo*100:+.1f}, {hi*100:+.1f}] -> "
+          f"{'excludes zero' if lo > 0 else 'spans zero'}")
+
+    # Concentration robustness: strip the single biggest winner's team.
+    if top:
+        name = top[0].selection
+        ex = [p for p in resolved if p.selection != name]
+        s2 = sorted(ex, key=lambda x: x.bought)
+        q2 = len(s2) // 4
+        b2, r2 = s2[3 * q2:], s2[:3 * q2]
+        lo2, hi2 = gap_ci(b2, r2, seed=12)
+        print(f"    excluding every '{name[:22]}' position: gap "
+              f"{(roi_of(b2)-roi_of(r2))*100:+.1f} pts, "
+              f"CI [{lo2*100:+.1f}, {hi2*100:+.1f}] -> "
+              f"{'excludes zero' if lo2 > 0 else 'spans zero'}")
+    print(f"\n    CAUTION: this is one split among several that were examined "
+          f"(sport,\n    hold-vs-sell, size). With multiple comparisons, an interval "
+          f"that\n    barely clears zero is weaker than it looks. Treat as a "
+          f"hypothesis to\n    test forward, not an established edge.")
+
     # ---- the number that cannot be misread ----
     deposits = cash.get("Transfer", 0.0) + cash.get("Bonus", 0.0)
     withdrawals = -cash.get("Withdrawal", 0.0)
