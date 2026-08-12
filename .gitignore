@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+trade_journal.jsonl
+KILL_SWITCH
+bets.json
