@@ -83,8 +83,8 @@ is itself uncertain, and full Kelly on a wrong estimate is how accounts die.
 
 [`RESEARCH.md`](RESEARCH.md) is a post-mortem on 232 real positions from a live
 Polymarket account ($12,615 deployed over seven months) — what the record supports,
-what it refutes, and the one hypothesis still open. A rendered version lives in
-[`docs/research-note.html`](docs/research-note.html).
+what it refutes, and the one hypothesis still open. A rendered version lives in [`docs/`](docs/index.html) and is
+published via GitHub Pages.
 
 ```bash
 python analyze_history.py <polymarket_export>.csv --balance <current_balance>
@@ -189,6 +189,7 @@ and the loop stops before its next order. Every decision is appended to
 scan.py                 read-only recommendations
 analyze_history.py      grade a real Polymarket export
 RESEARCH.md             post-mortem on 232 live positions
+docs/index.html         the same note, rendered (GitHub Pages)
 trade.py                the bot loop
 track.py                log / close / settle / report / import
 test_strategy.py        66 offline assertions on the decision logic
