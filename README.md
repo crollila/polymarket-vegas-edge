@@ -79,6 +79,23 @@ flatters every trade by half the spread.
 (default 0.25) and capped at 10% of bankroll. Quarter-Kelly because the edge estimate
 is itself uncertain, and full Kelly on a wrong estimate is how accounts die.
 
+## Research
+
+[`RESEARCH.md`](RESEARCH.md) is a post-mortem on 232 real positions from a live
+Polymarket account ($12,615 deployed over seven months) — what the record supports,
+what it refutes, and the one hypothesis still open. A rendered version lives in
+[`docs/research-note.html`](docs/research-note.html).
+
+```bash
+python analyze_history.py <polymarket_export>.csv --balance <current_balance>
+```
+
+Reports P&L by sport with bootstrap intervals, profit concentration, recovered entry
+prices, a conviction test on stake size, and a cash reconciliation. Two undocumented
+ledger conventions are handled explicitly — a `Won` amount is a share count, and a
+`Lost` row is a write-off rather than a cash movement; reading it naively turns a
++$643 record into −$1,331.
+
 ## Proving the edge
 
 A positive return proves very little. These four commands build the record that
@@ -170,6 +187,8 @@ and the loop stops before its next order. Every decision is appended to
 
 ```
 scan.py                 read-only recommendations
+analyze_history.py      grade a real Polymarket export
+RESEARCH.md             post-mortem on 232 live positions
 trade.py                the bot loop
 track.py                log / close / settle / report / import
 test_strategy.py        66 offline assertions on the decision logic

@@ -1,0 +1,368 @@
+<title>Prediction-Market Trading Record: A Post-Mortem</title>
+<style>
+  :root{
+    --paper:#F6F7F9; --panel:#FFFFFF; --ink:#10141A; --muted:#5C6673;
+    --rule:#DFE4EA; --rule-strong:#C3CBD5;
+    --accent:#17415E; --accent-soft:#E7EEF4;
+    --pos:#1B6B4A; --neg:#A93226; --caution:#8A5E12; --caution-soft:#FBF3E2;
+    --shadow:0 1px 2px rgba(16,20,26,.05), 0 8px 24px -16px rgba(16,20,26,.25);
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0E1116; --panel:#151A21; --ink:#E6EAF0; --muted:#8B95A4;
+      --rule:#242B35; --rule-strong:#39424F;
+      --accent:#8FBBD9; --accent-soft:#17222D;
+      --pos:#54B98A; --neg:#E38377; --caution:#D6A94C; --caution-soft:#241D0F;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0E1116; --panel:#151A21; --ink:#E6EAF0; --muted:#8B95A4;
+    --rule:#242B35; --rule-strong:#39424F;
+    --accent:#8FBBD9; --accent-soft:#17222D;
+    --pos:#54B98A; --neg:#E38377; --caution:#D6A94C; --caution-soft:#241D0F;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--serif); font-size:17px; line-height:1.62;
+    margin:0; padding:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:56rem; margin:0 auto; padding:clamp(2rem,5vw,4.5rem) clamp(1.1rem,4vw,2rem) 5rem;
+        display:flex; flex-direction:column; gap:2.75rem}
+  .prose{max-width:38rem}
+  p{margin:0 0 1rem}
+  p:last-child{margin-bottom:0}
+  a{color:var(--accent)}
+
+  /* ---- masthead ---- */
+  header{display:flex; flex-direction:column; gap:1rem;
+         border-bottom:2px solid var(--ink); padding-bottom:1.5rem}
+  .eyebrow{font-family:var(--mono); font-size:.68rem; letter-spacing:.14em;
+           text-transform:uppercase; color:var(--muted)}
+  h1{font-size:clamp(1.9rem,4.6vw,2.9rem); line-height:1.1; margin:0;
+     font-weight:600; letter-spacing:-.015em; text-wrap:balance}
+  .standfirst{font-size:1.12rem; color:var(--muted); max-width:36rem; margin:0}
+  .meta{display:flex; flex-wrap:wrap; gap:.4rem 1.6rem; font-family:var(--mono);
+        font-size:.72rem; color:var(--muted); letter-spacing:.03em}
+  .meta b{color:var(--ink); font-weight:600}
+
+  /* ---- section ---- */
+  section{display:flex; flex-direction:column; gap:1.1rem}
+  h2{font-size:1.32rem; font-weight:600; margin:0; letter-spacing:-.01em;
+     display:flex; align-items:baseline; gap:.7rem; text-wrap:balance}
+  h2 .num{font-family:var(--mono); font-size:.72rem; color:var(--accent);
+          letter-spacing:.1em; flex:none}
+  h3{font-size:1rem; font-weight:600; margin:0; font-family:var(--mono);
+     letter-spacing:.02em}
+
+  /* ---- verdict chips: status of each claim ---- */
+  .chip{display:inline-flex; align-items:center; gap:.4rem; font-family:var(--mono);
+        font-size:.66rem; letter-spacing:.1em; text-transform:uppercase;
+        padding:.24rem .55rem; border-radius:2px; border:1px solid currentColor;
+        font-weight:600; flex:none; white-space:nowrap}
+  .chip.refuted{color:var(--neg)}
+  .chip.confirmed{color:var(--pos)}
+  .chip.open{color:var(--caution)}
+
+  /* ---- callout ---- */
+  .callout{background:var(--panel); border:1px solid var(--rule);
+           border-left:3px solid var(--accent); padding:1.15rem 1.35rem;
+           display:flex; flex-direction:column; gap:.6rem; box-shadow:var(--shadow)}
+  .callout.warn{border-left-color:var(--caution); background:var(--caution-soft)}
+  .callout p{max-width:36rem}
+  .callout .lead{font-family:var(--mono); font-size:.7rem; letter-spacing:.12em;
+                 text-transform:uppercase; color:var(--muted)}
+
+  /* ---- headline figure ---- */
+  .figures{display:grid; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr)); gap:1px;
+           background:var(--rule); border:1px solid var(--rule)}
+  .fig{background:var(--panel); padding:1.1rem 1.2rem; display:flex;
+       flex-direction:column; gap:.3rem}
+  .fig .k{font-family:var(--mono); font-size:.66rem; letter-spacing:.09em;
+          text-transform:uppercase; color:var(--muted)}
+  .fig .v{font-family:var(--mono); font-size:1.5rem; font-weight:600;
+          font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+  .fig .n{font-size:.85rem; color:var(--muted); line-height:1.4}
+  .v.pos{color:var(--pos)} .v.neg{color:var(--neg)}
+
+  /* ---- tables ---- */
+  .scroll{overflow-x:auto; border:1px solid var(--rule); background:var(--panel)}
+  table{border-collapse:collapse; width:100%; font-family:var(--mono);
+        font-size:.8rem; font-variant-numeric:tabular-nums}
+  th,td{padding:.62rem .8rem; text-align:right; white-space:nowrap;
+        border-bottom:1px solid var(--rule)}
+  th{font-size:.64rem; letter-spacing:.09em; text-transform:uppercase;
+     color:var(--muted); font-weight:600; border-bottom:1px solid var(--rule-strong)}
+  th:first-child,td:first-child{text-align:left}
+  tbody tr:last-child td{border-bottom:none}
+  tr.total td{border-top:1px solid var(--rule-strong); font-weight:600}
+  td.pos{color:var(--pos)} td.neg{color:var(--neg)}
+  .flag{color:var(--neg); font-weight:600}
+
+  /* ---- CI plot: interval against zero ---- */
+  .ci{position:relative; height:1.15rem; min-width:11rem; width:100%}
+  .ci .axis{position:absolute; inset:0; border-left:0}
+  .ci .zero{position:absolute; top:0; bottom:0; width:1px; background:var(--rule-strong)}
+  .ci .bar{position:absolute; top:50%; transform:translateY(-50%); height:5px;
+           border-radius:3px; background:var(--accent); opacity:.85}
+  .ci .bar.spans{background:var(--caution)}
+  .ci .bar.neg{background:var(--neg)}
+  .ci-legend{display:flex; gap:1.2rem; flex-wrap:wrap; font-family:var(--mono);
+             font-size:.66rem; color:var(--muted); letter-spacing:.04em}
+  .ci-legend span{display:inline-flex; align-items:center; gap:.4rem}
+  .swatch{width:14px; height:5px; border-radius:3px; display:inline-block}
+
+  ul{margin:0; padding-left:1.1rem; display:flex; flex-direction:column; gap:.5rem;
+     max-width:38rem}
+  li::marker{color:var(--muted)}
+  code{font-family:var(--mono); font-size:.86em; background:var(--accent-soft);
+       padding:.1em .35em; border-radius:2px}
+  footer{border-top:1px solid var(--rule); padding-top:1.4rem; color:var(--muted);
+         font-size:.85rem; max-width:38rem}
+  @media (max-width:600px){ body{font-size:16px} .ci{min-width:8rem} }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Research note &middot; Prediction markets</div>
+    <h1>What 232 real positions actually say</h1>
+    <p class="standfirst">A post-mortem on a personal Polymarket US trading record — including the
+      two findings that contradict what the trader believed was true.</p>
+    <div class="meta">
+      <span><b>516</b> ledger rows</span>
+      <span><b>232</b> positions</span>
+      <span><b>$12,615</b> deployed</span>
+      <span><b>7</b> months</span>
+      <span>NFL &middot; NBA &middot; CBB &middot; NHL</span>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="num">01</span> The bottom line</h2>
+    <div class="figures">
+      <div class="fig">
+        <span class="k">Realized account P&amp;L</span>
+        <span class="v pos">+$231.76</span>
+        <span class="n">Cash in vs. cash out. Cannot be misread.</span>
+      </div>
+      <div class="fig">
+        <span class="k">Return on deposits</span>
+        <span class="v pos">+167.3%</span>
+        <span class="n">$138.54 in, $350 withdrawn, $20.30 held.</span>
+      </div>
+      <div class="fig">
+        <span class="k">ROI per dollar wagered</span>
+        <span class="v">+6.9%</span>
+        <span class="n">95% CI [−3.5%, +17.8%] — spans zero.</span>
+      </div>
+      <div class="fig">
+        <span class="k">Profit from two positions</span>
+        <span class="v neg">69%</span>
+        <span class="n">Both on the Seattle Seahawks.</span>
+      </div>
+    </div>
+    <div class="prose">
+      <p>The account made money. It has not demonstrated an edge. Those are different
+        claims, and the gap between them is the subject of this note.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">02</span> Two accounting facts that invert the answer</h2>
+    <div class="prose">
+      <p>Neither is documented. Both were established by reconciling the ledger against
+        itself, and each one flips a conclusion.</p>
+    </div>
+    <div class="callout">
+      <span class="lead">Finding — <code>Won</code> rows</span>
+      <p>The amount is a <strong>share count</strong>, not dollar profit. Winning shares settle
+        at $1, so payout <em>is</em> the share count — which is why every such value is a whole
+        number, and why <code>cost / payout</code> recovers the average entry price. It is the
+        only route to entry prices in this export.</p>
+    </div>
+    <div class="callout">
+      <span class="lead">Finding — <code>Lost</code> rows</span>
+      <p>A cost-basis write-off, <strong>not a cash movement</strong>. The money already left on
+        the <code>Bought</code> row. Summing every <code>cash_flow</code> therefore double-counts
+        every loss and reports this account as <strong class="flag">−$1,331</strong> instead of
+        <strong>+$643</strong>. Verified on 42 of 75 losing positions to the cent; the exceptions
+        are partial exits and rows whose buys predate the export.</p>
+    </div>
+    <div class="prose">
+      <p><strong>Method.</strong> 33 positions were still open at export and are excluded from ROI
+        rather than assumed lost. Marking them to zero would swing resolved P&amp;L from
+        +$866 to −$717, so the choice is not cosmetic.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03</span> By sport <span class="chip refuted">Prior refuted</span></h2>
+    <div class="prose">
+      <p>The belief going in was that college basketball was the most profitable segment.
+        It was the least.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Sport</th><th>Pos</th><th>Win%</th><th>Deployed</th><th>P&amp;L</th><th>ROI</th>
+              <th style="width:40%">95% CI on ROI</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>NFL</td><td>11</td><td>91%</td><td>$694</td><td class="pos">+$697</td><td class="pos">+100.4%</td>
+            <td><div class="ci"><div class="zero" style="left:19.05%"></div>
+              <div class="bar" style="left:30.9%; right:3.8%"></div></div></td>
+          </tr>
+          <tr>
+            <td>NBA</td><td>47</td><td>62%</td><td>$6,140</td><td class="pos">+$300</td><td class="pos">+4.9%</td>
+            <td><div class="ci"><div class="zero" style="left:19.05%"></div>
+              <div class="bar spans" style="left:15.5%; right:74.6%"></div></div></td>
+          </tr>
+          <tr>
+            <td>CBB</td><td>126</td><td>59%</td><td>$4,772</td><td class="neg">−$124</td><td class="neg">−2.6%</td>
+            <td><div class="ci"><div class="zero" style="left:19.05%"></div>
+              <div class="bar spans" style="left:9.8%; right:74.6%"></div></div></td>
+          </tr>
+          <tr class="total">
+            <td>All</td><td>185</td><td>62%</td><td>$12,615</td><td class="pos">+$866</td><td>+6.9%</td>
+            <td><div class="ci"><div class="zero" style="left:19.05%"></div>
+              <div class="bar spans" style="left:17.4%; right:72.5%"></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="ci-legend">
+      <span><i class="swatch" style="background:var(--accent)"></i> excludes zero</span>
+      <span><i class="swatch" style="background:var(--caution)"></i> spans zero — no edge established</span>
+      <span>scale −40% … +170%</span>
+    </div>
+    <div class="prose">
+      <p><strong>College basketball was the largest sample</strong> — 126 of 185 positions — which
+        makes it the least likely of these figures to be noise, and it lost money.</p>
+      <p><strong>NFL's +100% is not a finding.</strong> Eleven positions, 57% of the profit in a
+        single bet. The interval is wide because the sample is tiny.</p>
+      <p>Classification required exact full team names. Matching on mascot alone files
+        <em>Eastern Washington Eagles</em> under Philadelphia and <em>Eastern Illinois Panthers</em>
+        under Carolina — contaminating an 11-position pro sample with college results and moving
+        its ROI by more than 50 points before the bug was caught.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">04</span> Concentration <span class="chip confirmed">Confirmed</span></h2>
+    <div class="prose">
+      <p>Two Seattle Seahawks positions produced <strong>$599 of $866</strong> in resolved profit.
+        A single position accounts for 46% of everything. Remove those two and the entire
+        record returns <strong>+2.4%</strong> rather than +6.9%.</p>
+      <p>This is the dominant risk fact about the account: the headline return is one
+        outcome away from flat.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">05</span> The conviction hypothesis <span class="chip open">Not established</span></h2>
+    <div class="prose">
+      <p>Stake size is chosen <em>before</em> the outcome is known, which makes it a legitimate
+        ex-ante variable rather than a hindsight artifact. Sorting resolved positions into
+        stake quartiles:</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Quartile</th><th>n</th><th>Avg bet</th><th>Win%</th><th>ROI</th>
+              <th>Implied entry px</th><th>Edge vs. price</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Smallest</td><td>46</td><td>$4.77</td><td>52%</td><td class="neg">−18.9%</td><td>0.643</td><td class="neg">−12.2 pts</td></tr>
+          <tr><td>2nd</td><td>46</td><td>$10.88</td><td>57%</td><td class="neg">−9.1%</td><td>0.622</td><td class="neg">−5.6 pts</td></tr>
+          <tr><td>3rd</td><td>46</td><td>$31.79</td><td>54%</td><td class="neg">−19.8%</td><td>0.678</td><td class="neg">−13.4 pts</td></tr>
+          <tr class="total"><td>Largest</td><td>47</td><td>$221.98</td><td>83%</td><td class="pos">+11.9%</td><td>0.741</td><td class="pos">+8.8 pts</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>Implied entry price solves <code>ROI = winrate / price − 1</code>, which separates
+        <em>won often</em> from <em>beat the price</em> — a high win rate on heavy favorites is
+        expected and carries no edge. The largest quartile beat its own entry price by roughly
+        nine points; every other quartile lost to it.</p>
+    </div>
+
+    <div class="scroll" style="padding:1.1rem 1.2rem">
+      <h3 style="margin-bottom:.9rem">Largest quartile minus the rest — and its failure mode</h3>
+      <table style="border:none">
+        <tbody>
+          <tr><td style="border:none">All positions</td>
+              <td style="border:none; width:9rem">+29.2 pts</td>
+              <td style="border:none; width:55%"><div class="ci"><div class="zero" style="left:14.3%"></div>
+                <div class="bar" style="left:24.6%; right:13.6%"></div></div></td>
+              <td style="border:none" class="pos">excludes zero</td></tr>
+          <tr><td style="border:none">Excluding Seahawks</td>
+              <td style="border:none">+19.2 pts</td>
+              <td style="border:none"><div class="ci"><div class="zero" style="left:14.3%"></div>
+                <div class="bar spans" style="left:13.0%; right:29.7%"></div></div></td>
+              <td style="border:none" class="flag">spans zero</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <span class="lead">Why this is reported as a hypothesis</span>
+      <p>Removing every Seahawks position drops the gap to +19.2 points with a CI of
+        [−0.9, +39.2] — <strong>spanning zero</strong>. The direction survives; the significance
+        does not. Add that this is one split among several examined (sport, hold-vs-sell,
+        stake size), and a single robustness check that flips the conclusion is not an
+        established effect.</p>
+      <p><strong>Verdict:</strong> worth testing forward, not a result. It is stated here with
+        its failure mode attached rather than as the headline it superficially resembles.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">06</span> What this dataset cannot answer</h2>
+    <ul>
+      <li><strong>The halftime rule</strong> — <em>a team up 10+ at half wins ~80%, so buy below
+        0.80</em> — is untestable here. No timestamps finer than "6mo ago", no scores, no in-play
+        markers. The premise is sound, but the market prices it too; the edge exists only if the
+        market updates slower than the rule, and the negative CBB result is what the absence of
+        that lag looks like.</li>
+      <li><strong>Calibration.</strong> Entry price is recoverable only on winners, because losers
+        pay zero and reveal no share count. The 0.747 median entry is a biased sample and no
+        reliability curve can be built from it.</li>
+      <li><strong>Closing line value</strong>, the fastest-converging edge measure, needs prices
+        captured before each event closed. That data was never recorded — the single largest gap
+        in the dataset.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="num">07</span> Conclusions</h2>
+    <ul>
+      <li>Profitable in cash terms; per-dollar edge statistically indistinguishable from zero.</li>
+      <li>The strongest prior belief is contradicted by the largest sample in the dataset.</li>
+      <li>Returns are dangerously concentrated — 69% of profit from two positions.</li>
+      <li>Small stakes were systematically unprofitable: −12 points against price in the bottom
+        quartile, across many positions.</li>
+      <li>Conviction sizing is the one live hypothesis, and it is not yet significant.</li>
+    </ul>
+    <div class="callout">
+      <span class="lead">Actionable implication</span>
+      <p>The consistent loser is the small-stake tail — a behavioral finding with a direct
+        control: stop taking marginal positions. The live scanner implements this as a raised
+        edge threshold and a concentrated position cap, fixed in advance so that forward
+        results test the hypothesis rather than fit it.</p>
+      <p>Forward validation, not further slicing of these 185 positions, settles any of it.</p>
+    </div>
+  </section>
+
+  <footer>
+    All figures reproducible via <code>python analyze_history.py &lt;export&gt;.csv --balance &lt;bal&gt;</code>.
+    Confidence intervals are percentile bootstraps, 10,000 resamples.
+  </footer>
+</div>
