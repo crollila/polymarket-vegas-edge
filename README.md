@@ -1,5 +1,17 @@
 # Polymarket Vegas Edge
 
+<!-- project-history -->
+> ### Project history
+>
+> **Prediction-Market Trading & Calibration Research**  
+> **January 2026 - Present** &nbsp;|&nbsp; Independent Trading / Research
+>
+> Developed quantitative prediction-market strategies and research tools for Polymarket, including probability estimation, market-price calibration, expected-value and edge identification, historical trade analysis, position evaluation, and systematic identification of mispriced contracts. Expanded in August 2026 into additional systematic Polymarket strategies and analytical tooling.
+>
+> This repository was published to GitHub in August 2026. GitHub's repository
+> creation date reflects when the code was uploaded here, not when the work was
+> done. Prediction markets are not equities or futures. This work is tracked separately from my equities experience and is not counted toward it.
+
 Sportsbook lines versus prediction-market prices, and the statistics to tell whether
 the gap between them is an edge or a coincidence.
 
