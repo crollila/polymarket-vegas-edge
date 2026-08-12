@@ -10,3 +10,4 @@ bets.json
 predictions.jsonl
 bets.csv
 my_bets*.csv
+polymarket_trading_history*.csv
