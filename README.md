@@ -38,6 +38,7 @@ python scan.py --log            # same, but record the picks for CLV tracking
 python scan.py --json bets.json # machine-readable output
 python test_strategy.py         # 66 offline checks on the decision math
 python test_analytics.py        # 57 offline checks on the track-record math
+python test_inplay.py           # 70 offline checks on the live in-game model
 ```
 
 ```bash
@@ -95,6 +96,39 @@ prices, a conviction test on stake size, and a cash reconciliation. Two undocume
 ledger conventions are handled explicitly — a `Won` amount is a share count, and a
 `Lost` row is a write-off rather than a cash movement; reading it naively turns a
 +$643 record into −$1,331.
+
+## Live in-game harness
+
+```bash
+python live_cbb.py                 # live CBB, halftime signals. Read-only.
+python live_cbb.py --sport any     # any live basketball (CBB runs Nov-Mar)
+python live_cbb.py --watch --log   # poll continuously, record for grading
+```
+
+Tests a specific claim: *a team up 10+ at halftime wins ~80%, so buy it below 0.80.*
+Every observation shows three numbers — what the market charges, what the rule says,
+and what a Brownian-motion model (Stern 1994) says. They disagree at exactly the
+rule's trigger point: a 10-point halftime lead is 0.80 by the rule and ~0.90 by the
+model, so the market adjudicates. Signals where the two disagree are flagged, because
+those are the only observations that discriminate between them.
+
+Two constraints shaped the design:
+
+- **No game clock is published.** The gateway gives `period` but not time remaining,
+  so halftime is the only moment where the clock is known exactly — which is precisely
+  when the rule applies. Mid-period states return `None` rather than a guess.
+- **The pregame spread is the model's drift term.** Without it the model assumes both
+  teams were even, and a trailing underdog looks like a bargain when it is simply
+  losing to form. Observed live: a team down 7 read 0.30 assuming an even game and
+  0.08 once the real spread was applied, against a market of 0.18. Games with no
+  available spread are flagged in the output.
+
+Score orientation (`"A-B"` is YES-team–NO-team) was verified against 10 concurrent
+live games; in every one the implied lead agreed with the side the market favoured.
+
+`--trigger rule|model|both` picks which estimate may fire, so the two can be run
+head-to-head. Signals log through the same store as the pregame scanner, so
+`track.py settle` and `track.py report` grade them together.
 
 ## Proving the edge
 
@@ -188,6 +222,7 @@ and the loop stops before its next order. Every decision is appended to
 ```
 scan.py                 read-only recommendations
 analyze_history.py      grade a real Polymarket export
+live_cbb.py             live in-game halftime-rule harness
 RESEARCH.md             post-mortem on 232 live positions
 docs/index.html         the same note, rendered (GitHub Pages)
 trade.py                the bot loop
@@ -202,6 +237,7 @@ vegasanchor/
   oddsapi.py            The Odds API v4 client, median across books
   polymarket.py         gateway (public prices) + signed trading client
   edge.py               edge, Kelly sizing, order payloads
+  inplay.py             in-game win probability and the rule under test
   analytics.py          CLV, calibration, Brier, bootstrap CI
   tracking.py           append-only prediction log and settlement
 ```

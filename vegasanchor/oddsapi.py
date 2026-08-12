@@ -189,6 +189,101 @@ class OddsApiClient:
         return game
 
 
+def fetch_spreads(client: "OddsApiClient", sport_key: str) -> Dict[frozenset, Dict[str, float]]:
+    """
+    Pregame point spreads, as {team_pair: {team: expected_margin}}.
+
+    The spread IS the market's expected margin, which is exactly the drift term
+    an in-game win-probability model needs. Without it the model assumes both
+    teams were even before tip-off, and a heavy underdog trailing looks like a
+    bargain when it is simply losing as expected.
+
+    Sign convention: a team laying 6.5 has point -6.5 in the feed and an
+    expected margin of +6.5.
+    """
+    params: Dict[str, object] = {"markets": "spreads", "oddsFormat": "american",
+                                 "dateFormat": "iso"}
+    if client.bookmakers:
+        params["bookmakers"] = ",".join(client.bookmakers)
+    else:
+        params["regions"] = client.region
+    try:
+        raw = client._get(f"/sports/{sport_key}/odds", params)
+    except OddsApiError:
+        return {}
+
+    out: Dict[frozenset, Dict[str, float]] = {}
+    for ev in raw or []:
+        home = canonical_team(ev.get("home_team") or "") or (ev.get("home_team") or "")
+        away = canonical_team(ev.get("away_team") or "") or (ev.get("away_team") or "")
+        if not home or not away:
+            continue
+        margins: Dict[str, List[float]] = {}
+        for bm in ev.get("bookmakers", []) or []:
+            mk = next((m for m in bm.get("markets", []) or []
+                       if m.get("key") == "spreads"), None)
+            if not mk:
+                continue
+            for o in mk.get("outcomes", []) or []:
+                nm = canonical_team(o.get("name") or "") or (o.get("name") or "")
+                pt = o.get("point")
+                if nm and isinstance(pt, (int, float)):
+                    margins.setdefault(nm, []).append(-float(pt))
+        if margins:
+            out[frozenset((home, away))] = {
+                k: statistics.median(v) for k, v in margins.items()
+            }
+    return out
+
+
+def _loose(s: str) -> str:
+    import re as _re
+    return _re.sub(r"[^a-z0-9 ]", " ", (s or "").lower()).strip()
+
+
+def _names_match(a: str, b: str) -> bool:
+    """
+    Do two team strings refer to the same team?
+
+    Feeds disagree on how much of a name to print: Polymarket says
+    "Washington", The Odds API says "Washington Mystics". Neither equality nor
+    a shared last word works across leagues, so we accept a prefix/containment
+    match on whole words.
+    """
+    x, y = _loose(a), _loose(b)
+    if not x or not y:
+        return False
+    if x == y:
+        return True
+    xs, ys = x.split(), y.split()
+    short, long_ = (xs, ys) if len(xs) <= len(ys) else (ys, xs)
+    return long_[:len(short)] == short
+
+
+def match_spread(yes_team: str, no_team: str,
+                 spreads: Dict[frozenset, Dict[str, float]]
+                 ) -> Optional[Dict[str, float]]:
+    """
+    Find the pregame spread for a live game, re-keyed to the caller's names.
+
+    Requires a unique, unambiguous pairing. If a short name like "Los Angeles"
+    could refer to either of two teams in the feed, this returns None rather
+    than guessing -- attaching the wrong line to a live game is worse than
+    running without one.
+    """
+    hits = []
+    for pair, margins in spreads.items():
+        names = list(pair)
+        if len(names) != 2:
+            continue
+        for a, b in ((names[0], names[1]), (names[1], names[0])):
+            if _names_match(yes_team, a) and _names_match(no_team, b):
+                if a in margins and b in margins:
+                    hits.append({yes_team: margins[a], no_team: margins[b]})
+                break
+    return hits[0] if len(hits) == 1 else None
+
+
 def index_by_teams(games: Sequence[GameOdds]) -> Dict[frozenset, GameOdds]:
     """Index games by their unordered team pair for O(1) matching."""
     out: Dict[frozenset, GameOdds] = {}

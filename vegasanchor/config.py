@@ -27,6 +27,9 @@ class Config:
     include_live: bool = True            # include in-progress games
     max_books_stale_min: int = 30        # warn if the odds feed looks stale
 
+    # ---- Live in-game ----
+    inplay_sigma: float = 11.0           # SD of full-game margin; fit it from logged data
+
     # ---- Sizing ----
     kelly_fraction: float = 0.25         # fractional Kelly; 1.0 = full Kelly (do not)
     max_pct_bankroll_per_trade: float = 0.10
