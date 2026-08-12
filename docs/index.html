@@ -125,7 +125,38 @@
        padding:.1em .35em; border-radius:2px}
   footer{border-top:1px solid var(--rule); padding-top:1.4rem; color:var(--muted);
          font-size:.85rem; max-width:38rem}
+  .byline{font-family:var(--mono); font-size:.72rem; color:var(--muted);
+          letter-spacing:.03em}
+  .byline a{color:var(--muted)}
   @media (max-width:600px){ body{font-size:16px} .ci{min-width:8rem} }
+
+  /* ---- print / PDF ---- */
+  @page{ margin:14mm 15mm; }
+  @media print{
+    /* Pin the light palette: a viewer's dark OS must not bleed into paper. */
+    :root{
+      --paper:#FFFFFF; --panel:#FFFFFF; --ink:#101418; --muted:#4A535F;
+      --rule:#D5DBE2; --rule-strong:#A9B3BF;
+      --accent:#17415E; --accent-soft:#EDF2F6;
+      --pos:#14603F; --neg:#98291D; --caution:#7A5310; --caution-soft:#FAF4E6;
+      --shadow:none;
+    }
+    body{font-size:10.2pt; line-height:1.5; background:#fff}
+    .wrap{max-width:none; padding:0; gap:1.5rem}
+    a{color:var(--ink); text-decoration:none}
+    h1{font-size:22pt}
+    h2{font-size:13pt}
+    .fig .v{font-size:15pt}
+    table{font-size:8.4pt}
+    th,td{padding:.34rem .5rem}
+    .scroll{overflow:visible}
+    /* Keep a finding and its evidence on one page. */
+    section, .callout, .fig, .figures, tr{page-break-inside:avoid; break-inside:avoid}
+    h2{page-break-after:avoid; break-after:avoid}
+    table{page-break-inside:auto}
+    .ci-legend{font-size:7.5pt}
+    footer{font-size:8.5pt}
+  }
 </style>
 
 <div class="wrap">
@@ -141,6 +172,9 @@
       <span><b>$12,615</b> deployed</span>
       <span><b>7</b> months</span>
       <span>NFL &middot; NBA &middot; CBB &middot; NHL</span>
+    </div>
+    <div class="byline">Case Ollila &middot;
+      <a href="https://github.com/crollila/polymarket-vegas-edge">github.com/crollila/polymarket-vegas-edge</a>
     </div>
   </header>
 
