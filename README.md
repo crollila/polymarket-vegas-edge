@@ -34,8 +34,10 @@ Copy `.env.example` to `.env` and fill in:
 ```bash
 python scan.py                  # what to buy right now. Read-only, places nothing.
 python scan.py --all            # every matched game, including the no-bets
+python scan.py --log            # same, but record the picks for CLV tracking
 python scan.py --json bets.json # machine-readable output
-python test_strategy.py         # 66 offline checks on the math. No API key needed.
+python test_strategy.py         # 66 offline checks on the decision math
+python test_analytics.py        # 57 offline checks on the track-record math
 ```
 
 ```bash
@@ -77,6 +79,65 @@ flatters every trade by half the spread.
 (default 0.25) and capped at 10% of bankroll. Quarter-Kelly because the edge estimate
 is itself uncertain, and full Kelly on a wrong estimate is how accounts die.
 
+## Proving the edge
+
+A positive return proves very little. These four commands build the record that
+separates edge from luck:
+
+```bash
+python track.py log       # snapshot picks at decision time
+python track.py close     # capture the closing line, shortly before kickoff
+python track.py settle    # mark winners from the scores feed
+python track.py report    # CLV, calibration, ROI with a confidence interval
+```
+
+**Closing line value is the metric that matters.** Did you get a better price than
+the market's final one? It converges far faster than P&L because it isn't diluted by
+the coin-flip variance of who actually won. The test suite demonstrates this on a
+simulated bettor with a *known* 4-point edge: across 400 bets, CLV lands a t-stat of
+**39.9** while the ROI t-stat is **2.2** — same bets, same real edge, an 18× sharper
+signal. Waiting on P&L to tell you whether a strategy works means waiting for
+thousands of bets.
+
+The complementary test is a bettor with **no** edge who got lucky: +9.3% ROI over 60
+bets, CLV of exactly zero, and an ROI confidence interval of [-13.9%, +32.4%].
+Profitable on paper, no evidence of skill. Catching that case is the whole point.
+
+`report` also gives you a calibration table (when you say 70%, does it happen 70% of
+the time?), Brier score and skill score, and a bootstrap CI on ROI.
+
+### Grading bets you already placed
+
+```bash
+python track.py import my_bets.csv
+python track.py report --source manual
+```
+
+See `bets_template.csv` for the format. Minimum is `bet_on`, `odds`, `stake`; add
+`opponent` so a bet can be pinned to a specific week, `result` if you know it, and
+`closing_odds` — that last column is what unlocks CLV, and it's the difference
+between "I made money" and "I had an edge."
+
+An American-odds wager maps exactly onto a prediction-market contract: cost per share
+is the implied probability, and stake buys `stake / cost` shares. A -150 bet and a
+$0.60 contract are the same position, so book bets and Polymarket bets land in one
+comparable record.
+
+### On backtesting last season
+
+There is no backtest in this repo, and it isn't an oversight. It cannot be built from
+available data:
+
+- **Historical sportsbook odds** are paywalled on The Odds API — the free tier returns
+  `HISTORICAL_UNAVAILABLE_ON_FREE_USAGE_PLAN`.
+- **Historical Polymarket US prices do not exist publicly.** No price-history, candles,
+  trades, or timeseries endpoint (all 404), and querying closed or archived NFL events
+  returns zero records. Last season's order books are simply gone.
+
+Both halves of the edge calculation are unavailable, so any "2025 backtest" here would
+be simulated data wearing a real result's clothing. Forward-tracked CLV is slower but
+it's actually evidence.
+
 ## Safety
 
 Live trading requires the `--live` flag *and* typing `TRADE` at a prompt. On top of
@@ -101,13 +162,19 @@ and the loop stops before its next order. Every decision is appended to
   exchange fee schedule.
 - Nothing here is financial advice, and the `min_order_usd` floor means a small
   bankroll will find edges it cannot legally act on.
+- **No backtest exists** (see above) and the bot has no track record yet. Until
+  `track.py report` shows a CLV t-stat above 2 on a real sample, treat every edge
+  number here as a hypothesis rather than a result.
 
 ## Layout
 
 ```
 scan.py                 read-only recommendations
 trade.py                the bot loop
+track.py                log / close / settle / report / import
 test_strategy.py        66 offline assertions on the decision logic
+test_analytics.py       57 offline assertions on the track-record math
+bets_template.csv       CSV format for importing bets you already placed
 vegasanchor/
   config.py             every tunable
   devig.py              American odds -> fair probability
@@ -115,6 +182,8 @@ vegasanchor/
   oddsapi.py            The Odds API v4 client, median across books
   polymarket.py         gateway (public prices) + signed trading client
   edge.py               edge, Kelly sizing, order payloads
+  analytics.py          CLV, calibration, Brier, bootstrap CI
+  tracking.py           append-only prediction log and settlement
 ```
 
 ## Verified against the live API

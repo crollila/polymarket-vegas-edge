@@ -61,6 +61,8 @@ def main() -> int:
     ap.add_argument("--maker", action="store_true", help="price as a resting maker order")
     ap.add_argument("--all", action="store_true", help="show every matched game, including no-bets")
     ap.add_argument("--json", metavar="PATH", help="also write results as JSON")
+    ap.add_argument("--log", action="store_true",
+                    help="record these picks to predictions.jsonl for CLV tracking")
     args = ap.parse_args()
 
     cfg = Config.from_env(
@@ -145,8 +147,35 @@ def main() -> int:
         if unfunded:
             print(f"{len(unfunded)} edge(s) found but sized below the "
                   f"${cfg.min_order_usd:.0f} exchange minimum -- bankroll too small to act.")
-        print("\nRead as: 'BUY NO on CIN' = buy the NO contract, which pays if "
-              "Cincinnati does NOT win.")
+        # ACTION names the team you are BACKING, not the contract's subject.
+        # On a DET-vs-CIN market, YES is Detroit, so the NO contract pays when
+        # Detroit loses -- i.e. when Cincinnati wins.
+        print("\nRead as: 'BUY NO on CIN' = buy the NO contract on that market; "
+              "it pays $1 if Cincinnati WINS.")
+        print("The team named in ACTION is always the team you are betting on.")
+
+    if args.log and recs:
+        from vegasanchor.tracking import PredictionStore
+        store = PredictionStore()
+        n = 0
+        for r in recs:
+            if store.already_logged(r.market.market_slug, r.side):
+                continue
+            store.log_prediction(
+                market_slug=r.market.market_slug, game=r.market.label(), side=r.side,
+                bet_on=r.team, cost=r.cost, fair=r.fair, edge=r.edge,
+                # Log a nominal 1%-of-bankroll paper stake even when the real
+                # order would be below the exchange minimum -- the point is to
+                # accumulate a graded sample, not to simulate fills.
+                shares=r.shares or round(bankroll * 0.01 / max(r.cost, 0.01), 2),
+                stake=r.stake_usd or round(bankroll * 0.01, 2),
+                kickoff=r.market.kickoff, book_american=r.book_american,
+                books=r.game.books_used, source="bot", paper=True,
+                teams=[r.market.yes_team, r.market.no_team],
+            )
+            n += 1
+        print(f"Logged {n} prediction(s) for tracking. "
+              f"Run `python track.py close` before kickoff to capture CLV.")
 
     if args.json:
         payload = [{

@@ -1,0 +1,6 @@
+date,bet_on,opponent,odds,stake,result,closing_odds,fair
+2025-11-09,Detroit Lions,Washington Commanders,-150,100,win,-175,
+2025-11-09,Buffalo Bills,Miami Dolphins,-200,100,win,-210,
+2025-11-16,Kansas City Chiefs,Denver Broncos,-135,100,loss,-125,
+2025-11-16,Green Bay Packers,Chicago Bears,120,50,win,110,
+2025-11-23,Philadelphia Eagles,Dallas Cowboys,-160,100,loss,-150,

@@ -4,3 +4,9 @@ __pycache__/
 trade_journal.jsonl
 KILL_SWITCH
 bets.json
+
+# Your own betting records and track record. Local by default -- once you have
+# a real logged history worth showing, force-add it:  git add -f predictions.jsonl
+predictions.jsonl
+bets.csv
+my_bets*.csv
