@@ -57,6 +57,26 @@ Cincinnati wins, and FanDuel's devigged price says that happens 83% of the time.
 **193 offline tests** cover the decision math, the track-record statistics, and the
 in-game model — no API key needed to run them.
 
+## How it fits together
+
+```mermaid
+flowchart LR
+    FD["FanDuel's betting lines<br/>(via The Odds API)"] --> DEVIG["Remove the house cut<br/>('devig')"]
+    DEVIG --> COMP["Compare the same game<br/>on both venues"]
+    PM["Polymarket live prices<br/>(public gateway)"] --> COMP
+    COMP -->|"gap is 4+ cents"| KELLY["Size the bet<br/>(fractional Kelly)"]
+    COMP -->|"prices agree"| PASS["No bet - the<br/>usual outcome"]
+    KELLY --> OUT["Ranked list:<br/>what to buy and why"]
+    OUT -.->|"scan.py --log"| STORE[("predictions.jsonl<br/>every pick, recorded<br/>at decision time")]
+    OUT -.->|"trade.py --live"| EXCH["Signed order to<br/>Polymarket US"]
+    STORE --> TRACK["track.py grades<br/>every pick later"]
+```
+
+In plain terms: a sportsbook and a prediction market both put a price on the same
+question — *will this team win?* When those prices disagree by more than the cost of
+trading, one of them is wrong. This repo bets that the sportsbook is right more often,
+records every prediction at the moment it's made, and then grades itself.
+
 ## Setup
 
 ```bash
@@ -93,6 +113,18 @@ Useful flags on both: `--min-edge 0.03`, `--kelly 0.5`, `--books fanduel,pinnacl
 `--maker` (rest orders instead of crossing the spread), `--no-live` (skip in-progress games).
 
 ## How it decides
+
+One real game, start to finish:
+
+```mermaid
+flowchart TD
+    A["FanDuel: Bengals -500, Lions +380"] --> B["As probabilities:<br/>83.3% + 20.8% = 104.1%"]
+    B --> C["The extra 4.1% is the bookmaker's fee.<br/>Remove it: Bengals are really ~82%"]
+    C --> D["Polymarket sells<br/>'Bengals win' at 73 cents"]
+    D -->|"82 - 73 = 9 points cheap"| E["BUY: pays $1<br/>if the Bengals win"]
+```
+
+The same four steps, precisely:
 
 **1. Strip the vig.** FanDuel at -110/-110 implies 52.4% + 52.4% = 104.8%. That 4.8%
 is the house margin. Comparing raw book prices to Polymarket makes *every* market look
@@ -147,8 +179,20 @@ python live_cbb.py --watch --log   # poll continuously, record for grading
 ```
 
 Tests a specific claim: *a team up 10+ at halftime wins ~80%, so buy it below 0.80.*
-Every observation shows three numbers — what the market charges, what the rule says,
-and what a Brownian-motion model (Stern 1994) says. They disagree at exactly the
+
+```mermaid
+flowchart TD
+    GAME["Live game at halftime:<br/>Duke up by 10"] --> MKT["THE MARKET<br/>Polymarket charges 84c"]
+    GAME --> RULE["THE RULE<br/>'up 10 wins 80%'<br/>84c is too dear: pass"]
+    GAME --> MODEL["THE MODEL<br/>math says ~90%<br/>84c is cheap: buy"]
+    MKT --> Q["Three opinions,<br/>one game"]
+    RULE --> Q
+    MODEL --> Q
+    Q --> LOGD["Log all three, let the final score decide.<br/>The disagreements are the observations that matter."]
+```
+
+Every observation records all three numbers — what the market charges, what the rule
+says, and what a Brownian-motion model (Stern 1994) says. They disagree at exactly the
 rule's trigger point: a 10-point halftime lead is 0.80 by the rule and ~0.90 by the
 model, so the market adjudicates. Signals where the two disagree are flagged, because
 those are the only observations that discriminate between them.
@@ -175,6 +219,14 @@ head-to-head. Signals log through the same store as the pregame scanner, so
 
 A positive return proves very little. These four commands build the record that
 separates edge from luck:
+
+```mermaid
+flowchart LR
+    LOG["1. LOG<br/>record the pick and its<br/>price at decision time"] --> CLOSE["2. CLOSE<br/>capture the market's final<br/>price before kickoff"]
+    CLOSE --> SETTLE["3. SETTLE<br/>record who won"]
+    SETTLE --> REPORT["4. REPORT<br/>CLV, calibration,<br/>ROI with intervals"]
+    REPORT -->|"every game week"| LOG
+```
 
 ```bash
 python track.py log       # snapshot picks at decision time
